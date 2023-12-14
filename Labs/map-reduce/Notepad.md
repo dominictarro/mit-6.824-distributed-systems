@@ -12,7 +12,7 @@ The course provides the students a series of boilerplate files to get started. T
 
 ![Figure-1](./_static/dean-ghemawat-figure-1.png)
 
-Per Figure 1 of Dean and Ghemawat, it's one process for submitting the job, one for receiving/coordinating, and one for each worker. The workers will have to be spawned by the coordinator.
+Per Figure 1 of Dean and Ghemawat, it's one process for submitting the job, one for receiving/coordinating, and one for each worker. To keep things simple, we will stick to the paper and have the user program spawn the coordinator and workers.
 
 ## Rust RPC
 
