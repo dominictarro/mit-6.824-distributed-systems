@@ -25,8 +25,7 @@ Per Figure 1 of Dean and Ghemawat, it's one process for submitting the job, one 
 ## Networking
 
 - [ ] Create a client to connect to the server.
-- [ ] Create an RPC commands for map.
-- [ ] Create Term-Vector/Grep/Reverse Index RPC commands for reduce.
+- [ ] Create Term-Vector/Grep/Reverse Index RPC commands.
 
 ## Data
 

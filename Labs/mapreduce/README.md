@@ -1,4 +1,4 @@
-# Lab 1: Map Reduce
+# Lab 1: MapReduce
 
 [![Paper](https://img.shields.io/badge/Paper-red)](
 https://pdos.csail.mit.edu/6.824/papers/mapreduce.pdf)
