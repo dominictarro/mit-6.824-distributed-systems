@@ -30,4 +30,7 @@ Per Figure 1 of Dean and Ghemawat, it's one process for submitting the job, one 
 
 ## Data
 
-- [ ] Generate test input/evaluation data.
+- [x] Generate test input data.
+- [ ] Create a test evaluation file.
+
+Test input data was not available in course materials. I am using 2020 English News Corpus (1M) from the [Wortschatz Leipzig](https://wortschatz.uni-leipzig.de/en/download/English) instead.
