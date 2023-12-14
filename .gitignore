@@ -15,3 +15,6 @@ Cargo.lock
 
 # Test data
 **/data/
+
+# Mac OS X Finder metadata
+.DS_Store
