@@ -13,6 +13,57 @@ pub struct FileChunk {
     pub path: String
 }
 
+struct ChunkerContext {
+    pub source: String,
+    pub path: String,
+    pub chunk_idx: usize,
+    pub line_i: usize,
+    pub byte_i: usize,
+    pub writer: LineWriter<File>,
+}
+
+fn build_chunker_context(source: &str, out: &str, chunk_idx: usize) -> ChunkerContext {
+    let chunk_path = format!("{}/{}", out, chunk_idx);
+    let chunk_file = match File::create(&chunk_path) {
+        Err(_why) => panic!("couldn't create {}: {}", chunk_path, _why),
+        Ok(chunk_file) => chunk_file
+    };
+    ChunkerContext {
+        source: source.to_string(),
+        path: chunk_path.clone(),
+        chunk_idx: chunk_idx,
+        line_i: 0,
+        byte_i: 0,
+        writer: LineWriter::new(chunk_file)
+    }
+}
+
+#[allow(private_interfaces)]
+pub trait Chunker {
+    fn is_end_of_chunk(&self, ctx: &ChunkerContext) -> bool;
+    fn build_chunk(&self, ctx: &ChunkerContext) -> FileChunk;
+}
+
+pub struct LineChunker {
+    pub max_lines: usize
+}
+
+#[allow(private_interfaces)]
+impl Chunker for LineChunker {
+
+    fn is_end_of_chunk(&self, ctx: &ChunkerContext) -> bool {
+        ctx.line_i >= self.max_lines
+    }
+
+    fn build_chunk(&self, ctx: &ChunkerContext) -> FileChunk {
+        FileChunk {
+            source: ctx.source.clone(),
+            line_start: self.max_lines * ctx.chunk_idx,
+            line_end: ctx.line_i + self.max_lines * ctx.chunk_idx,
+            path: ctx.path.clone(),
+        }
+    }
+}
 
 #[allow(dead_code)]
 impl FileChunk {
@@ -47,7 +98,7 @@ impl FileChunk {
 /// let mut chunks: Vec<chunker::FileChunk> = Vec::new();
 /// chunker::chunk_file_by_lines(&src, &dir, 150_000, &mut chunks);
 /// ```
-pub fn chunk_file_by_lines(path: &str, out: &str, max_lines: usize, chunks: &mut Vec<FileChunk>) {
+pub fn chunk_file(path: &str, out: &str, chunker: &dyn Chunker, chunks: &mut Vec<FileChunk>) {
     let file = match File::open(&path) {
         Err(_why) => panic!("couldn't open {}: {}", path, _why),
         Ok(file) => file,
@@ -59,54 +110,34 @@ pub fn chunk_file_by_lines(path: &str, out: &str, max_lines: usize, chunks: &mut
     'chunk_loop: loop {
         // Running this routine for each chunk. Iterates over `lines` and saves it to the chunk
         // until the max is hit or the source file is exhausted
-        let chunk_path = format!("{}/{}", out, chunk_idx);
-        let chunk_file = match File::create(&chunk_path) {
-            Err(_why) => panic!("couldn't create {}: {}", chunk_path, _why),
-            Ok(chunk_file) => chunk_file
-        };
-        let mut writer = LineWriter::new(chunk_file);
-        let mut line_i = 0;
-
-        while line_i < max_lines {
+        let mut ctx: ChunkerContext = build_chunker_context(path, out, chunk_idx);
+        while !chunker.is_end_of_chunk(&ctx) {
             // Get the next line. If None, the buffer is exhausted and loop should be terminated
             let line = match lines.next() {
                 None => {
-                    // Add the chunk before exiting loop scope
-                    if line_i > 0 {
-                        chunks.push(
-                            FileChunk {
-                                source: path.to_string(),
-                                line_start: max_lines * chunk_idx,
-                                line_end: line_i + max_lines * chunk_idx,
-                                path: chunk_path
-                            }
-                        );
+                    // Add the chunk before exiting loop scope if there's anything in it
+                    if ctx.byte_i > 0 {
+                        chunks.push(chunker.build_chunk(&ctx));
                     };
                     break 'chunk_loop
                 },
                 Some(line) => {
                     match line {
-                        Err(_why) => panic!("couldn't read line {}: {}", line_i, _why),
+                        Err(_why) => panic!("couldn't read line {}: {}", ctx.line_i, _why),
                         Ok(v) => v
                     }
                 },
             };
 
             // Write the line and increment
-            writer.write_all(line.as_bytes()).expect(format!("Failed to write line {} to {}", line_i, chunk_path).as_str());
-            writer.write_all(b"\n").expect(format!("Failed to write linebreak at {} to {}", line_i, chunk_path).as_str());
-            line_i += 1;
+            ctx.writer.write_all(line.as_bytes()).expect(format!("Failed to write line {} to {}", ctx.line_i, ctx.path).as_str());
+            ctx.writer.write_all(b"\n").expect(format!("Failed to write linebreak at {} to {}", ctx.line_i, ctx.path).as_str());
+            ctx.line_i += 1;
+            ctx.byte_i += line.len() + 1;
         }
-        writer.flush().expect(format!("Failed to flush {}", chunk_path).as_str());
+        ctx.writer.flush().expect(format!("Failed to flush {}", ctx.path).as_str());
         // Add the completed chunk
-        chunks.push(
-            FileChunk {
-                source: path.to_string(),
-                line_start: max_lines * chunk_idx,
-                line_end: line_i + max_lines * chunk_idx,
-                path: chunk_path
-            }
-        );
+        chunks.push(chunker.build_chunk(&ctx));
         chunk_idx += 1;
     }
 }
@@ -152,10 +183,11 @@ mod tests {
         let path = many_line_file(&tmp, LINES_IN_TEST_FILE);
 
         let mut chunks: Vec<FileChunk> = Vec::new();
-        chunk_file_by_lines(
+        let chunker = LineChunker {max_lines: 1000};
+        chunk_file(
             &path,
             tmp.path().to_str().expect("Failed to convert tempdir path to string"),
-            1000,
+            &chunker,
             &mut chunks
         );
 
@@ -176,12 +208,13 @@ mod tests {
     fn test_chunk_by_lines_with_remainder(tmp: TempDir) {
         const LINES_IN_TEST_FILE: usize = 10_500;
         let path = many_line_file(&tmp, LINES_IN_TEST_FILE);
-        println!("{}", path);
+
         let mut chunks: Vec<FileChunk> = Vec::new();
-        chunk_file_by_lines(
+        let chunker = LineChunker {max_lines: 1000};
+        chunk_file(
             &path,
             tmp.path().to_str().expect("Failed to convert tempdir path to string"),
-            1000,
+            &chunker,
             &mut chunks
         );
 
