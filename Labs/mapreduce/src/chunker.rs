@@ -162,7 +162,7 @@ impl Chunker for SizeBySpaceChunker {
     /// let src = String::from("/home/file.txt");
     /// let dir = String::from("/tmp/file.txt.chunks/");
     /// let mut chunks: Vec<FileChunk> = Vec::new();
-    /// let chnkr: SizeBySpaceChunker = SizeBySpaceChunker{max_lines: 100};
+    /// let chnkr: SizeBySpaceChunker = SizeBySpaceChunker{max_bytes: 2 ^ 20};
     /// chnkr.chunk(&src, &dir, 150_000, &mut chunks);
     /// ```
     fn chunk(&self, path: &str, out: &str, chunks: &mut Vec<FileChunk>) {
